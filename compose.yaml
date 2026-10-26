@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATA_DIR: /app/data
+      TRUST_PROXY_HOPS: 1
+    volumes:
+      - luckybox-data:/app/data
+    expose:
+      - "3000"
+    networks:
+      - luckybox
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_HOST: ${SITE_HOST:?Set SITE_HOST to your domain in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - luckybox
+volumes:
+  luckybox-data:
+  caddy-data:
+  caddy-config:
+networks:
+  luckybox:

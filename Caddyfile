@@ -1,0 +1,6 @@
+{$SITE_HOST} {
+  request_body {
+    max_size 6MB
+  }
+  reverse_proxy app:3000
+}

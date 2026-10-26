@@ -1,0 +1,44 @@
+{
+  "name": "luckybox",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "lint": "eslint src tests scripts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test:e2e": "node --import tsx --test --test-concurrency=1 tests/*.e2e.ts",
+    "smoke": "node scripts/smoke.mjs",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "migrate": "node --env-file-if-exists=.env dist/cli.js migrate",
+    "seed": "node --env-file-if-exists=.env dist/cli.js seed",
+    "backup": "node --env-file-if-exists=.env dist/cli.js backup",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "helmet": "^8.1.0",
+    "nodemailer": "^10.2.1",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^7.0.1",
+    "esbuild": "0.28.2",
+    "eslint": "10.10.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.41.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

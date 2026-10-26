@@ -1,0 +1,12 @@
+import { spawn } from 'node:child_process';
+import { watch } from 'node:fs';
+import { cp } from 'node:fs/promises';
+import { context } from 'esbuild';
+await import('./build.mjs');
+const client = await context({ entryPoints:['src/client.ts'],bundle:true,platform:'browser',target:'es2022',outfile:'dist/public/app.js',sourcemap:true });
+await client.watch();
+const watcher = watch('public',{recursive:true},() => { cp('public','dist/public',{recursive:true}).catch(console.error); });
+const server = spawn(process.execPath,['--env-file-if-exists=.env','--import','tsx','--watch','src/server.ts'],{stdio:'inherit',env:process.env});
+const stop = () => { watcher.close(); void client.dispose(); server.kill(); };
+process.on('SIGINT',stop); process.on('SIGTERM',stop);
+server.on('exit',code => { stop(); process.exitCode = code ?? 0; });

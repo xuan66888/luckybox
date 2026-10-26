@@ -1,0 +1,483 @@
+{
+  "verification": "LUCKYBOX neon frontend backend-preservation audit",
+  "verifiedAtUtc": "2026-09-08T15:34:06.747Z",
+  "baselineRoot": "<baseline-root>",
+  "currentRoot": "<current-root>",
+  "method": "Byte-level SHA256 for backend files, migrations, package manifests and lockfile; TypeScript AST printer normalization without comments for client API calls and protected request/transaction/form/upload sections.",
+  "backend": {
+    "allFilesByteIdentical": true,
+    "migrationFileSetsIdentical": true,
+    "originalFiles": [
+      {
+        "path": "src/app.ts",
+        "baselineSha256": "8ebfb5b8a6599441054caf9bfe6d741d8543a87390868158247c4b13018a333f",
+        "currentSha256": "8ebfb5b8a6599441054caf9bfe6d741d8543a87390868158247c4b13018a333f",
+        "byteIdentical": true,
+        "bytes": 37764
+      },
+      {
+        "path": "src/auth.ts",
+        "baselineSha256": "4208008e0cc227b569333f724254edd1aaf8930ebcfc191a338d66ac265b3a6c",
+        "currentSha256": "4208008e0cc227b569333f724254edd1aaf8930ebcfc191a338d66ac265b3a6c",
+        "byteIdentical": true,
+        "bytes": 3241
+      },
+      {
+        "path": "src/config.ts",
+        "baselineSha256": "69d46362007782aad6e1daeb403d5b82411bddcf2a86ed9d8b22b908ef64ba87",
+        "currentSha256": "69d46362007782aad6e1daeb403d5b82411bddcf2a86ed9d8b22b908ef64ba87",
+        "byteIdentical": true,
+        "bytes": 1936
+      },
+      {
+        "path": "src/db.ts",
+        "baselineSha256": "dc16fdede06f1a01a9637a25fdf98097a2991a11a5f24fec881638a27e9b0b55",
+        "currentSha256": "dc16fdede06f1a01a9637a25fdf98097a2991a11a5f24fec881638a27e9b0b55",
+        "byteIdentical": true,
+        "bytes": 2718
+      },
+      {
+        "path": "src/fairness.ts",
+        "baselineSha256": "31510735d880e0cd78e9c445bef58fbd656112c0076c00121c72395646921bbb",
+        "currentSha256": "31510735d880e0cd78e9c445bef58fbd656112c0076c00121c72395646921bbb",
+        "byteIdentical": true,
+        "bytes": 819
+      },
+      {
+        "path": "src/server.ts",
+        "baselineSha256": "e8558a85a1f0d690bb675a12972fc56c6af32154081cbf28cb238e7d17512fdc",
+        "currentSha256": "e8558a85a1f0d690bb675a12972fc56c6af32154081cbf28cb238e7d17512fdc",
+        "byteIdentical": true,
+        "bytes": 1127
+      },
+      {
+        "path": "src/cli.ts",
+        "baselineSha256": "c855251b1a7cba12c2c894509850456d21a9736f6f59ba5cc7dbd303e0320ffa",
+        "currentSha256": "c855251b1a7cba12c2c894509850456d21a9736f6f59ba5cc7dbd303e0320ffa",
+        "byteIdentical": true,
+        "bytes": 1990
+      },
+      {
+        "path": "migrations/001_initial.sql",
+        "baselineSha256": "dc5caf8722aed7c0add6fc13cdcbf4db0f926c5b8ef63d17b2d98f0767388e94",
+        "currentSha256": "dc5caf8722aed7c0add6fc13cdcbf4db0f926c5b8ef63d17b2d98f0767388e94",
+        "byteIdentical": true,
+        "bytes": 5805
+      }
+    ]
+  },
+  "dependencies": {
+    "declarations": [
+      {
+        "field": "dependencies",
+        "baseline": {
+          "express": "^5.1.0",
+          "helmet": "^8.1.0",
+          "nodemailer": "10.0.0",
+          "sharp": "0.35.4",
+          "zod": "^4.1.0"
+        },
+        "current": {
+          "express": "^5.1.0",
+          "helmet": "^8.1.0",
+          "nodemailer": "10.0.0",
+          "sharp": "0.35.4",
+          "zod": "^4.1.0"
+        },
+        "identical": true,
+        "baselineCanonicalSha256": "fc7ec3907fd6a026224a3ce90df6c998ac9088b16738683ab81b10127c8af99a",
+        "currentCanonicalSha256": "fc7ec3907fd6a026224a3ce90df6c998ac9088b16738683ab81b10127c8af99a"
+      },
+      {
+        "field": "devDependencies",
+        "baseline": {
+          "@playwright/test": "^1.55.0",
+          "@types/express": "^5.0.3",
+          "@types/node": "^24.0.0",
+          "@types/nodemailer": "^7.0.1",
+          "esbuild": "0.28.2",
+          "eslint": "10.10.0",
+          "tsx": "^4.20.5",
+          "typescript": "^5.9.2",
+          "typescript-eslint": "^8.41.0"
+        },
+        "current": {
+          "@playwright/test": "^1.55.0",
+          "@types/express": "^5.0.3",
+          "@types/node": "^24.0.0",
+          "@types/nodemailer": "^7.0.1",
+          "esbuild": "0.28.2",
+          "eslint": "10.10.0",
+          "tsx": "^4.20.5",
+          "typescript": "^5.9.2",
+          "typescript-eslint": "^8.41.0"
+        },
+        "identical": true,
+        "baselineCanonicalSha256": "8218d1528961cc53a03336448e102bad0c7eababcff7b341380ad4ee7d070c8b",
+        "currentCanonicalSha256": "8218d1528961cc53a03336448e102bad0c7eababcff7b341380ad4ee7d070c8b"
+      },
+      {
+        "field": "engines",
+        "baseline": {
+          "node": ">=24.0.0 <25"
+        },
+        "current": {
+          "node": ">=24.0.0 <25"
+        },
+        "identical": true,
+        "baselineCanonicalSha256": "037c447d64fca6e8030ea13f56e9416175c31c07703bfef0431686b8da179382",
+        "currentCanonicalSha256": "037c447d64fca6e8030ea13f56e9416175c31c07703bfef0431686b8da179382"
+      },
+      {
+        "field": "allowScripts",
+        "baseline": {
+          "esbuild@0.28.2": true
+        },
+        "current": {
+          "esbuild@0.28.2": true
+        },
+        "identical": true,
+        "baselineCanonicalSha256": "d8a39ba9f17979bc6360611b32963021cd8f312d5afae2b8f7470d3db8266777",
+        "currentCanonicalSha256": "d8a39ba9f17979bc6360611b32963021cd8f312d5afae2b8f7470d3db8266777"
+      }
+    ],
+    "packageLock": {
+      "path": "package-lock.json",
+      "baselineSha256": "0f7630ea610b4af5917bd067c332f4e3e40a9027ad152c78b19c2ec04f5d9127",
+      "currentSha256": "0f7630ea610b4af5917bd067c332f4e3e40a9027ad152c78b19c2ec04f5d9127",
+      "byteIdentical": true,
+      "bytes": 197558
+    },
+    "packageManifest": {
+      "path": "package.json",
+      "baselineSha256": "a5de65cb6fe4313f85c854b17587d010edb4d30d87ccc0e67a0d9bdc2de6eabb",
+      "currentSha256": "205d956706c8d5950745dd58e0e605f4af5abc350f7ffd4aa9d9e5897fa92bca",
+      "byteIdentical": false,
+      "bytes": 1333
+    },
+    "scriptChanges": [
+      {
+        "name": "test:e2e",
+        "baseline": "node --import tsx --test tests/browser.e2e.ts",
+        "current": "node --import tsx --test --test-concurrency=1 tests/*.e2e.ts"
+      }
+    ],
+    "notes": "package.json may differ only in documented scripts; dependency declarations and resolved lockfile are evaluated independently."
+  },
+  "client": {
+    "baselineRawSha256": "a1382976b55253852dc050258572427a9d58f3e83332782fae8c65c9e1e1b589",
+    "currentRawSha256": "8dbfcfedd3e843ce03ff70a34141ac7b97626e1cc609b24fad937ff883cb4a99",
+    "presentationFileExpectedToDiffer": true,
+    "apiCallsIdentical": true,
+    "apiCallCount": 40,
+    "baselineApiCallsNormalizedSha256": "18594f15a752f0098418560185b880b134c1e434e90313e6133609c2ffbc2a83",
+    "currentApiCallsNormalizedSha256": "18594f15a752f0098418560185b880b134c1e434e90313e6133609c2ffbc2a83",
+    "apiCalls": [
+      {
+        "callee": "fetch",
+        "arguments": [
+          "`/api${url}`",
+          "{ method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf, 'Idempotency-Key': key ?? crypto.randomUUID() }, body: body === undefined ? undefined : JSON.stringify(body) }"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "url",
+          "body",
+          "key"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/auth/me'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/pools'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/me/ledger'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/me/topups'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/me/collection'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/me/shipments'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/me/draws'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/creator/pools'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/creator/settlements'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/fulfillment/shipments'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/admin/pools'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/admin/users'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/admin/topups'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/admin/settlements'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/fulfillment/shipments'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/admin/audit'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "`/pools/${id}`"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "url",
+          "body"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/auth/logout'",
+          "{}"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "`/pools/${id}/proof`"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "`/pools/${id}`"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/admin/users'"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "`/admin/pools/${id}/draws`"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "`/auth/${name}`",
+          "{ email: value('email'), password: value('password'), ...(name === 'register' ? { name: value('name') } : {}) }"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/auth/forgot'",
+          "{ email: value('email') }"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/auth/reset'",
+          "{ token: id, password: value('password') }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "'/pools'",
+          "{ ...content(), name: value('name'), kind: value('kind'), price: Number(value('price')), prizes }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "`/pools/${id}/draw`",
+          "{ quantity: Number(value('quantity')) }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "`/pools/${id}/content`",
+          "content()"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "'/shipments'",
+          "{ itemIds: [id], name: value('name'), phone: value('phone'), address: value('address') }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "`/shipments/${id}/ship`",
+          "{ carrier: value('carrier'), tracking: value('tracking') }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "'/topups'",
+          "{ points: Number(value('points')), reference: value('reference') }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "`/admin/users/${id}`",
+          "{ role: value('role'), disabled: data.has('disabled') }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "`/pools/${id}/service`",
+          "{ verification: value('verification'), officialFulfillment: data.has('officialFulfillment'), note: value('note') }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "`/admin/pools/${id}/review`",
+          "{ approve: name === 'approve-pool', note: value('note') }"
+        ]
+      },
+      {
+        "callee": "mutate",
+        "arguments": [
+          "`/admin/pools/${id}/cancel`",
+          "{ note: value('note') }"
+        ]
+      },
+      {
+        "callee": "fetch",
+        "arguments": [
+          "'/api/uploads'",
+          "{ method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': file.type, 'X-CSRF-Token': csrf }, body: file }"
+        ]
+      },
+      {
+        "callee": "api",
+        "arguments": [
+          "'/config'"
+        ]
+      }
+    ],
+    "protectedSections": [
+      {
+        "name": "api",
+        "identical": true,
+        "baselineNormalizedSha256": "ea379c79d3a78b7fd96b201620698ebcc5700002832fc466e8c21137b524d76f",
+        "currentNormalizedSha256": "ea379c79d3a78b7fd96b201620698ebcc5700002832fc466e8c21137b524d76f"
+      },
+      {
+        "name": "document.changeListener",
+        "identical": true,
+        "baselineNormalizedSha256": "c7c0010ec0752d54c90237f94cb39baf6b680bd29dd90ea3897170124b46ccb7",
+        "currentNormalizedSha256": "c7c0010ec0752d54c90237f94cb39baf6b680bd29dd90ea3897170124b46ccb7"
+      },
+      {
+        "name": "document.submitListener",
+        "identical": true,
+        "baselineNormalizedSha256": "de268d45f9e4b7aa93afe0724139d0967f3e6644d84b7f85dd37c8c819729143",
+        "currentNormalizedSha256": "de268d45f9e4b7aa93afe0724139d0967f3e6644d84b7f85dd37c8c819729143"
+      },
+      {
+        "name": "mutate",
+        "identical": true,
+        "baselineNormalizedSha256": "3e9264fd5529d255e2aa33d88dcc57581d6160e271524cf948c97d2efc01be73",
+        "currentNormalizedSha256": "3e9264fd5529d255e2aa33d88dcc57581d6160e271524cf948c97d2efc01be73"
+      },
+      {
+        "name": "mutations",
+        "identical": true,
+        "baselineNormalizedSha256": "f00ff2a9a060b20a3d42a637f7ca2bd7113e56aeacdfc23b9d3e2f4abc12949a",
+        "currentNormalizedSha256": "f00ff2a9a060b20a3d42a637f7ca2bd7113e56aeacdfc23b9d3e2f4abc12949a"
+      },
+      {
+        "name": "pendingKeys",
+        "identical": true,
+        "baselineNormalizedSha256": "785574e418ca31f92966e2c38dd4c1c8423451f86a4248648520c4de63c6aaf5",
+        "currentNormalizedSha256": "785574e418ca31f92966e2c38dd4c1c8423451f86a4248648520c4de63c6aaf5"
+      },
+      {
+        "name": "session",
+        "identical": true,
+        "baselineNormalizedSha256": "a4e86b98a74e1256a64c380eac979aedc78916da4ae9b7e59a900252f9bf9285",
+        "currentNormalizedSha256": "a4e86b98a74e1256a64c380eac979aedc78916da4ae9b7e59a900252f9bf9285"
+      }
+    ],
+    "scope": "API/fetch/mutate callees and arguments remain identical in source order. Includes CSRF and Idempotency-Key request headers, retry pending keys, operation endpoint table, submit busy guard, upload validation and upload request listener. Draw result presentation is intentionally replaced; server mutation call and payload remain unchanged."
+  },
+  "result": "PASS"
+}

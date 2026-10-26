@@ -1,0 +1,94 @@
+/* Original LuckyBox CSS foil materials. Only elements opting into data-holo are affected. */
+[data-holo] {
+  --holo-x: 50%;
+  --holo-y: 40%;
+  --holo-rx: 0deg;
+  --holo-ry: 0deg;
+  --holo-opacity: .12;
+  --holo-glare: .11;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transform: perspective(1000px) rotateX(var(--holo-rx)) rotateY(var(--holo-ry));
+  transform-origin: center;
+  transition: transform 320ms cubic-bezier(.2,.7,.25,1), box-shadow 240ms ease;
+  touch-action: pan-y pinch-zoom;
+}
+
+[data-holo]::before,
+[data-holo]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 240ms ease;
+}
+
+[data-holo]::before {
+  background-image:
+    linear-gradient(116deg, transparent 9%, #8368ff 21%, #df99ff 28%, transparent 36%, #58dbe4 47%, transparent 55%, #b581ff 67%, #f6d892 73%, transparent 88%),
+    repeating-linear-gradient(34deg, transparent 0 7px, #c8acff44 8px, transparent 9px 20px);
+  background-size: 220% 220%, 100% 100%;
+  background-position: calc(100% - var(--holo-x)) calc(100% - var(--holo-y)), center;
+  mix-blend-mode: screen;
+  opacity: var(--holo-opacity);
+}
+
+[data-holo]::after {
+  background:
+    radial-gradient(ellipse at var(--holo-x) var(--holo-y), #fff9edb3 0%, #d8c0ff30 19%, transparent 54%),
+    linear-gradient(135deg, #ffffff24, transparent 35%, transparent 75%, #bf89ff33);
+  box-shadow: inset 0 0 0 1px #cba8ff30;
+  mix-blend-mode: screen;
+  opacity: var(--holo-glare);
+}
+
+[data-holo].is-holo-active {
+  --holo-opacity: .34;
+  --holo-glare: .44;
+  will-change: transform;
+  transition-duration: 90ms, 240ms;
+}
+
+[data-holo]:focus-visible,
+[data-holo]:focus-within {
+  --holo-opacity: .24;
+  --holo-glare: .28;
+}
+
+[data-holo="rainbow"]::before {
+  background-image:
+    linear-gradient(123deg, transparent 11%, #ab6bff 22%, #e47bac 30%, #f4cd8d 36%, #8fe4d2 45%, #56bdf0 53%, #c69fff 64%, transparent 80%),
+    repeating-linear-gradient(46deg, transparent 0 14px, #dcbeff66 15px, transparent 16px 31px);
+}
+
+[data-holo="gold"] { --holo-opacity: .2; --holo-glare: .17; }
+[data-holo="gold"]::before {
+  background-image:
+    linear-gradient(118deg, transparent 5%, #a76c2d 19%, #f7d586 29%, #fff2c0 34%, transparent 44%, #b77628 56%, #f9d789 66%, transparent 83%),
+    repeating-linear-gradient(34deg, transparent 0 12px, #f7d68c44 13px, transparent 14px 28px);
+}
+[data-holo="gold"]::after {
+  background:
+    radial-gradient(ellipse at var(--holo-x) var(--holo-y), #fff0c0c2 0%, #ffcb6329 24%, transparent 57%),
+    linear-gradient(130deg, #fff1ba3d, transparent 38%, transparent 70%, #ca9c3438);
+  box-shadow: inset 0 0 0 1px #f6d68d55;
+}
+[data-holo="gold"].is-holo-active { --holo-opacity: .45; --holo-glare: .46; }
+
+[data-holo="quiet"] { --holo-opacity: .04; --holo-glare: .06; }
+[data-holo="quiet"].is-holo-active,
+[data-holo="quiet"]:focus-within { --holo-opacity: .12; --holo-glare: .2; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-holo], [data-holo].is-holo-active { transform: none; transition: none; will-change: auto; }
+  [data-holo]::before, [data-holo]::after { transition: none; background-position: center; }
+  [data-holo]::before { opacity: .1; }
+  [data-holo]::after { opacity: .1; background: linear-gradient(135deg, #e8d2ff26, transparent 60%); }
+}
+
+@media (forced-colors: active), (prefers-contrast: more) {
+  [data-holo]::before, [data-holo]::after { display: none; }
+}
