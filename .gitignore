@@ -6,3 +6,19 @@ coverage/
 test-results/
 playwright-report/
 *.log
+
+# Keep runtime secrets, customer data and local release evidence private.
+.env*
+!.env.example
+*.sqlite*
+*.db
+*.db-*
+*.pem
+*.key
+*.p12
+*.pfx
+backups/
+uploads/
+VERIFICATION.txt
+ROLLBACK_COPY/
+PATCH_COPY/

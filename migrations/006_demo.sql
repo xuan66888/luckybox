@@ -1,0 +1,2 @@
+CREATE TABLE demo_context (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, created_at INTEGER NOT NULL) STRICT;
+CREATE TABLE demo_orders (order_no TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), amount INTEGER NOT NULL CHECK(amount BETWEEN 1 AND 20000), status TEXT NOT NULL CHECK(status IN('pending','paid','failed','cancelled')), created_at INTEGER NOT NULL, paid_at INTEGER) STRICT;

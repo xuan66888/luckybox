@@ -1,0 +1,16 @@
+ALTER TABLE users ADD COLUMN email_verified_at INTEGER;
+ALTER TABLE users ADD COLUMN phone TEXT;
+ALTER TABLE users ADD COLUMN phone_verified_at INTEGER;
+CREATE UNIQUE INDEX users_verified_phone ON users(phone) WHERE phone_verified_at IS NOT NULL;
+CREATE TABLE identities (provider TEXT NOT NULL, subject TEXT NOT NULL, user_id TEXT NOT NULL REFERENCES users(id), PRIMARY KEY(provider,subject), UNIQUE(provider,user_id)) STRICT;
+CREATE TABLE email_verifications (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), email TEXT NOT NULL, expires_at INTEGER NOT NULL) STRICT;
+CREATE TABLE phone_challenges (user_id TEXT PRIMARY KEY REFERENCES users(id), phone TEXT NOT NULL, expires_at INTEGER NOT NULL) STRICT;
+CREATE TABLE oauth_states (state_hash TEXT PRIMARY KEY, browser_hash TEXT NOT NULL, verifier TEXT NOT NULL, nonce TEXT NOT NULL, user_id TEXT REFERENCES users(id), session_hash TEXT, expires_at INTEGER NOT NULL) STRICT;
+CREATE TABLE admin_mfa (user_id TEXT PRIMARY KEY REFERENCES users(id), secret TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN(0,1)), last_counter INTEGER NOT NULL DEFAULT -1, recovery_hashes TEXT NOT NULL DEFAULT '[]') STRICT;
+CREATE TABLE community_settings (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, body TEXT NOT NULL) STRICT;
+CREATE TABLE referral_codes (user_id TEXT PRIMARY KEY REFERENCES users(id), code TEXT UNIQUE NOT NULL) STRICT;
+CREATE TABLE referrals (invitee_id TEXT PRIMARY KEY REFERENCES users(id), inviter_id TEXT NOT NULL REFERENCES users(id), created_at INTEGER NOT NULL, qualified_order TEXT UNIQUE, rewarded_at INTEGER, CHECK(invitee_id<>inviter_id)) STRICT;
+CREATE TABLE reward_claims (user_id TEXT NOT NULL REFERENCES users(id), task TEXT NOT NULL, period TEXT NOT NULL, points INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(user_id,task,period)) STRICT;
+CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, read_at INTEGER) STRICT;
+CREATE INDEX notifications_user ON notifications(user_id,created_at);
+CREATE TABLE refunds (id TEXT PRIMARY KEY, order_no TEXT UNIQUE NOT NULL REFERENCES payment_orders(order_no), user_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN('requested','rejected','completed')), provider_reference TEXT UNIQUE, requested_at INTEGER NOT NULL, completed_at INTEGER, operator_id TEXT REFERENCES users(id)) STRICT;

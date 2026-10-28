@@ -1,0 +1,44 @@
+[
+  {
+    "code": "godzilla-2023",
+    "url": "https://on-line.1kuji.com/Contents/ProductImages/0/sap_0000008647_prize_002_LL.jpg",
+    "mime": "image/jpeg",
+    "bytes": 119138,
+    "sha256": "2223ab5b6dbcd108c154ec4125737f6cd6cf5c235e8a7c19c708ff0c372bd70b",
+    "page": "https://on-line.1kuji.com/Form/Product/ProductDetail.aspx?bid=IP00006383&pid=sap_0000008647",
+    "credit": "BANDAI SPIRITS／一番くじONLINE",
+    "asset": "public/assets/reference-godzilla-2023.svg",
+    "assetSha256": "9b2348e92925ff1036a355aa02065ae29e539e56ab21404eef33af8830109c53",
+    "width": 1000,
+    "height": 1000,
+    "originalPixelsUnchanged": true
+  },
+  {
+    "code": "chiikawa-shisa",
+    "url": "https://prcdn.freetls.fastly.net/release_image/168561/79/168561-79-b54a9d8b40b2acabf0a511de53b7b32c-1500x1500.jpg",
+    "mime": "image/jpeg",
+    "bytes": 154350,
+    "sha256": "c6309eb8574b93de850377d45277323d7665374ad6a34f213283d4899bb99fa2",
+    "page": "https://prtimes.jp/main/html/rd/p/000000079.000168561.html",
+    "credit": "Gray Parker Service 官方新聞稿",
+    "asset": "public/assets/reference-chiikawa-shisa.svg",
+    "assetSha256": "6919cdfbbeab3cf1cb764a51158f6805e90caa1ed958242c5b722376cd2acb06",
+    "width": 1500,
+    "height": 1500,
+    "originalPixelsUnchanged": true
+  },
+  {
+    "code": "beyblade-bx52",
+    "url": "https://beyblade.takaratomy.co.jp/beyblade-x/lineup/_image/BX52_list.png",
+    "mime": "image/png",
+    "bytes": 114363,
+    "sha256": "28fe710f777c7ac2657273fa2a9f7022100e8e93c45fd5529603f30ca332d19a",
+    "page": "https://beyblade.takaratomy.co.jp/beyblade-x/lineup/bx52.html",
+    "credit": "TAKARA TOMY",
+    "asset": "public/assets/reference-beyblade-bx52.svg",
+    "assetSha256": "b8d73bc7c1a2d3c566562f38925a37d8f192ff964dee89ccc7e8ee9ed4525eaf",
+    "width": 375,
+    "height": 454,
+    "originalPixelsUnchanged": true
+  }
+]

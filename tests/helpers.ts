@@ -40,7 +40,7 @@ export async function fixture(overrides: Partial<Config> = {}) {
   const admin = client(), creator = client(), player = client(), other = client();
   await admin.login('admin'); await creator.login('creator'); await player.login('player'); await other.login('other');
   return {store,config,ids,admin,creator,player,other,client,origin,directory,
-    async close() { await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve())); store.close(); assert.ok(path.resolve(directory).startsWith(path.join(os.tmpdir(),'luckybox-test-'))); rmSync(directory,{recursive:true,force:true}); }
+    async close() { await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve())); app.locals.demoStore?.close(); store.close(); assert.ok(path.resolve(directory).startsWith(path.join(os.tmpdir(),'luckybox-test-'))); rmSync(directory,{recursive:true,force:true}); }
   };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;

@@ -14,6 +14,6 @@ server.requestTimeout = 30000; server.headersTimeout = 15000;
 let stopping = false;
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => {
   if (stopping) return; stopping = true;
-  server.close(() => { store.close(); process.exit(0); });
+  server.close(() => { app.locals.demoStore?.close(); store.close(); process.exit(0); });
   setTimeout(() => process.exit(1), 10000).unref();
 });

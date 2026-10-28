@@ -22,11 +22,11 @@ test('desktop and mobile UI: create, review, open, draw, redeem, ship and settle
     await login(creator,'creator'); await login(admin,'admin'); await login(player,'player');
     await creator.getByRole('button',{name:'創作者中心',exact:true}).click(); await creator.getByRole('button',{name:'＋ 建立獎池',exact:true}).click();
     await creator.getByLabel('獎池名稱',{exact:true}).fill('UI 驗證收藏池'); await creator.getByLabel('商品 / 活動介紹',{exact:true}).fill('測試商品介紹 <img src=x onerror=alert(1)>');
-    await creator.getByLabel('獎品名稱',{exact:true}).fill('實體收藏卡'); await creator.getByLabel('數量',{exact:true}).fill('2');
+    await creator.getByLabel('獎品名稱',{exact:true}).fill('實體收藏卡'); await creator.getByLabel('數量（獎品庫存）',{exact:true}).fill('2');
     await creator.getByLabel('實體商品兌點額',{exact:true}).fill('50'); await creator.getByRole('button',{name:'儲存草稿',exact:true}).click();
     await expect(creator.locator('dialog')).not.toBeVisible(); await creator.getByRole('button',{name:'送審',exact:true}).click();
     await expect(creator.getByText('待審核',{exact:true}).first()).toBeVisible();
-    await admin.getByRole('button',{name:'管理後台',exact:true}).click(); await admin.getByRole('button',{name:'核准',exact:true}).click();
+    await admin.goto(f.origin+'/admin/'); await admin.getByRole('button',{name:'核准',exact:true}).click();
     await admin.getByLabel('審核 / 取消原因',{exact:true}).fill('已核實測試庫存'); await admin.getByRole('button',{name:'確認送出',exact:true}).click();
     await expect(admin.locator('dialog')).not.toBeVisible();
     await creator.getByRole('button',{name:'創作者中心',exact:true}).click(); await creator.getByRole('button',{name:'開放抽獎',exact:true}).click();
@@ -47,7 +47,7 @@ test('desktop and mobile UI: create, review, open, draw, redeem, ship and settle
     await other.getByRole('button',{name:'我的收藏',exact:true}).click(); await other.getByRole('button',{name:'確認收貨',exact:true}).click();
     await expect(other.getByText('已收貨',{exact:true}).first()).toBeVisible();
     await creator.getByRole('button',{name:'創作者中心',exact:true}).click(); await creator.getByRole('button',{name:'申請結算',exact:true}).click();
-    await admin.getByRole('button',{name:'管理後台',exact:true}).click(); await admin.getByRole('button',{name:'核准點數結算',exact:true}).click();
+    await admin.goto(f.origin+'/admin/'); await admin.getByRole('button',{name:'核准點數結算',exact:true}).click();
     await expect(admin.getByText('已結算',{exact:true}).first()).toBeVisible();
     mkdirSync('test-results',{recursive:true}); await admin.evaluate(() => window.scrollTo({top:0,behavior:'instant'})); await other.evaluate(() => window.scrollTo({top:0,behavior:'instant'})); await admin.screenshot({path:'test-results/admin-desktop.png',fullPage:true}); await other.screenshot({path:'test-results/collection-mobile.png',fullPage:true});
     await player.getByRole('button',{name:'探索獎池',exact:true}).click(); await expect(player.locator('.hero')).toBeVisible(); await player.evaluate(() => window.scrollTo({top:0,behavior:'instant'})); await player.screenshot({path:'test-results/home-desktop.png',fullPage:true});

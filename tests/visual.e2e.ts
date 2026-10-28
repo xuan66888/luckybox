@@ -180,7 +180,8 @@ test('neon presentation: responsive routes, holographic interaction, reduced mot
     pages.push(admin); await observe(admin, errors); await login(admin, f, 'admin');
     await admin.locator('.mobileNav [data-page="account"]').click();
     await expect(admin.getByRole('heading', { name:'我的帳戶', exact:true })).toBeVisible();
-    await admin.locator('[data-page="admin"]:visible').first().click();
+    await expect(admin.locator('[data-page="admin"]')).toHaveCount(0);
+    await admin.goto(f.origin+'/admin/');
     await expect(admin.getByRole('heading', { name:'官方管理後台', exact:true })).toBeVisible();
     await noOverflow(admin, 'mobile admin'); await screenshot(admin, 'admin-mobile');
 

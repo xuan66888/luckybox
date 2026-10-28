@@ -19,16 +19,23 @@ export async function passwordMatches(password: string, stored: string) {
   const key = await derive(password, salt);
   return !!hash && hash.length === 128 && timingSafeEqual(key, Buffer.from(hash, 'hex'));
 }
-export function cookieName(config: Config) { return config.production ? '__Host-lb_session' : 'lb_session'; }
+// Password verification is asynchronous. Never grant a session from its stale row.
+export function freshCredentialUser(store:Store, snapshot:Record<string,any>) {
+  const user=store.one('SELECT * FROM users WHERE id=? AND disabled=0',snapshot.id);
+  if(!user||user.email!==snapshot.email||user.role!==snapshot.role||user.password_hash!==snapshot.password_hash)throw new HttpError(401,'登入資訊已變更，請重新登入');
+  return user;
+}
+export function cookieName(config: Config) { return config.demoMode ? (config.production?'__Secure-lb_demo_session':'lb_demo_session') : config.production ? '__Host-lb_session' : 'lb_session'; }
 export function newSession(store: Store, config: Config, userId: string, res: Response) {
   const token = randomBytes(32).toString('hex'), csrf = randomBytes(32).toString('hex');
   store.run('DELETE FROM sessions WHERE expires_at<?', Date.now());
   store.run('INSERT INTO sessions VALUES (?,?,?,?)', sha256(token), userId, csrf, Date.now() + config.sessionHours * 3600000);
-  res.cookie(cookieName(config), token, { httpOnly: true, secure: config.production, sameSite: 'strict', path: '/', maxAge: config.sessionHours * 3600000 });
+  res.cookie(cookieName(config), token, { httpOnly: true, secure: config.production, sameSite: 'strict', path: config.basePath||'/', maxAge: config.sessionHours * 3600000 });
   return csrf;
 }
 export function authMiddleware(store: Store, config: Config) {
   return (req: Request, _res: Response, next: NextFunction) => {
+    delete req.user;delete req.session;
     const cookie = (req.headers.cookie ?? '').split(';').map(x => x.trim()).find(x => x.startsWith(`${cookieName(config)}=`));
     const token = cookie?.slice(cookie.indexOf('=') + 1);
     if (token && /^[a-f0-9]{64}$/.test(token)) {

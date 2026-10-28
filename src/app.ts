@@ -9,24 +9,36 @@ import nodemailer from 'nodemailer';
 import { Store, HttpError, requireRow } from './db.js';
 import type { Config } from './config.js';
 import { sha256, ticketOrder } from './fairness.js';
-import { authMiddleware, requireAuth, requireAdmin, passwordHash, passwordMatches, passwordSchema, publicUser, newSession, cookieName } from './auth.js';
+import { createCheckout, ecpayEndpoint, installEcpayNotify } from './ecpay.js';
+import { installCommunity } from './community.js';
+import {installRefunds} from './refunds.js';
+import { installIdentity, identityGate, checkAdminMfa } from './identity.js';
+import { installAdmin } from './admin.js';
+import {walletSummary,reconciliation} from './wallet.js';
+import {installStorefront} from './storefront.js';
+import {recordRegistrationConsent,requirePublishedStorefront} from './storefront-data.js';
+import {upcomingProducts} from './starter-catalog.js';
+import {installPractice,practicePools,practiceHistory} from './practice.js';
+import { effectiveOdds, pickWeighted } from './weighted.js';
+import { authMiddleware, requireAuth, requireAdmin, passwordHash, passwordMatches, passwordSchema, publicUser, newSession, cookieName, freshCredentialUser } from './auth.js';
 
 const idSchema = z.uuid();
 const text = (max: number) => z.string().trim().min(1).max(max);
 const imageRef = z.union([z.literal(''), z.string().regex(/^\/uploads\/[a-f0-9-]{36}\.webp$/)]);
 const contentSchema = z.object({ description: z.string().max(12000), cover: imageRef, descriptionImages: z.array(imageRef).max(12) }).strict();
-const prizeSchema = z.object({ name: text(120), kind: z.enum(['physical','points','none']), image: imageRef.default(''), value: z.number().int().min(0).max(1000000), redeemPoints: z.number().int().min(0).max(1000000), quantity: z.number().int().min(1).max(10000) }).strict();
-const poolSchema = contentSchema.extend({ name: text(120), kind: z.enum(['paid','free']), price: z.number().int().min(0).max(100000), prizes: z.array(prizeSchema).min(1).max(30) }).strict();
+const prizeSchema = z.object({ name: text(120), kind: z.enum(['physical','points']), image: imageRef.default(''), value: z.number().int().min(0).max(1000000), redeemPoints: z.number().int().min(0).max(1000000), quantity: z.number().int().min(1).max(10000) }).strict();
+const poolSchema = contentSchema.extend({ name: text(120), kind: z.enum(['paid','free']), price: z.number().int().min(0).max(100000), prizes: z.array(prizeSchema).min(1).max(100) }).strict();
 const getId = (req: Request) => idSchema.parse(req.params.id);
 const currentUser = (req: Request) => { if (!req.user) throw new HttpError(401, '請先登入'); return req.user; };
 function assert(condition: unknown, message: string, status = 409): asserts condition { if (!condition) throw new HttpError(status, message); }
 
 export function createApp(store: Store, config: Config, publicDir: string) {
+  if(config.demoMode)throw Error('Demo service retired; use the main site');
   const app = express();
   mkdirSync(config.uploadDir, { recursive: true, mode: 0o700 });
   app.disable('x-powered-by');
   app.set('trust proxy', config.proxyHops);
-  app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'"], imgSrc: ["'self'"], connectSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'none'"], formAction: ["'self'"], frameAncestors: ["'none'"], upgradeInsecureRequests: config.production ? [] : null } }, strictTransportSecurity: config.production ? { maxAge: 31536000 } : false }));
+  app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", ...(config.identity.turnstileSite ? ['https://challenges.cloudflare.com'] : [])], styleSrc: ["'self'"], imgSrc: ["'self'"], connectSrc: ["'self'", ...(config.identity.turnstileSite ? ['https://challenges.cloudflare.com'] : [])], frameSrc: ["'self'", ...(config.identity.turnstileSite ? ['https://challenges.cloudflare.com'] : [])], objectSrc: ["'none'"], baseUri: ["'none'"], formAction: ["'self'", ...(config.ecpay.enabled ? [new URL(ecpayEndpoint(config)).origin] : [])], frameAncestors: ["'none'"], upgradeInsecureRequests: config.production ? [] : null } }, strictTransportSecurity: config.production ? { maxAge: 31536000 } : false }));
   app.use((req, res, next) => {
     const requestId = randomUUID(), start = Date.now();
     res.setHeader('X-Request-Id', requestId);
@@ -43,8 +55,10 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     if (count > max) { res.setHeader('Retry-After', Math.ceil(windowMs / 1000)); throw new HttpError(429, '操作過於頻繁，請稍後再試'); }
     next();
   };
+  app.use('/demo',(req,res)=>{res.setHeader('Cache-Control','no-store');if(['GET','HEAD'].includes(req.method)){res.clearCookie(config.production?'__Secure-lb_demo_session':'lb_demo_session',{path:'/demo',secure:config.production,httpOnly:true,sameSite:'strict'});res.redirect(302,'/');}else res.status(410).json({error:'舊體驗站已關閉，請使用主站'});});
   app.get('/health/live', (_req, res) => res.json({ status: 'ok' }));
   app.get('/health/ready', (_req, res) => { store.one('SELECT name FROM schema_migrations LIMIT 1'); res.json({ status: 'ready' }); });
+  installEcpayNotify(app, store, config);
   app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   app.use('/api', limit('api', 600, 60000));
   app.use(authMiddleware(store, config));
@@ -57,10 +71,12 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     next();
   });
   app.use(express.json({ limit: '128kb' }));
+  app.use(identityGate(store, config));
+  installIdentity(app, store, config);
 
-  function mutation(req: Request, res: Response, operation: () => unknown) {
+  function mutation(req: Request, res: Response, operation: () => unknown, fingerprint:unknown=req.body) {
     const user = currentUser(req), key = z.string().regex(/^[A-Za-z0-9_-]{16,100}$/).parse(req.get('Idempotency-Key'));
-    const hash = sha256(JSON.stringify([req.method, req.originalUrl, req.body]));
+    const hash = sha256(JSON.stringify([req.method, req.originalUrl, fingerprint]));
     const result = store.tx(() => {
       const existing = store.one('SELECT * FROM idempotency WHERE user_id=? AND key=?', user.id, key);
       if (existing) { assert(existing.request_hash === hash, '同一請求識別碼不能重複用於不同操作'); return JSON.parse(existing.response); }
@@ -73,6 +89,9 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     });
     res.json(result);
   }
+  installCommunity(app, store, mutation,config.demoMode);
+  installRefunds(app,store,config,mutation);
+  function everyDrawWins(id:string) { assert(!store.one("SELECT 1 FROM prizes WHERE pool_id=? AND kind='none'",id), '此舊獎池含未中獎，已停止抽獎；請建立每抽必中獎池', 409); }
   function ownedPool(req: Request) {
     const p = requireRow(store.one('SELECT * FROM pools WHERE id=?', getId(req)));
     assert(p.owner_id === currentUser(req).id || req.user?.role === 'admin', '不能修改其他人的獎池', 403);
@@ -87,37 +106,60 @@ export function createApp(store: Store, config: Config, publicDir: string) {
   function poolView(p: any, privateView = false) {
     const { seed: _seed, pending_content: pending, service_request: service, ...rest } = p;
     if (!privateView) { delete rest.review_note; delete rest.reserve_points; }
+    if (p.draw_mode === 'weighted') { delete rest.commitment; delete rest.manifest; delete rest.manifest_hash; }
     return { ...rest, descriptionImages: JSON.parse(p.description_images), pendingContent: privateView && pending ? JSON.parse(pending) : null,
-      serviceRequest: privateView && service ? JSON.parse(service) : null, prizes: store.all('SELECT * FROM prizes WHERE pool_id=? ORDER BY id', p.id) };
+      serviceRequest: privateView && service ? JSON.parse(service) : null, prizes: p.draw_mode === 'weighted' ? effectiveOdds(store.all("SELECT * FROM prizes WHERE pool_id=? ORDER BY CASE WHEN kind='none' THEN 1 ELSE 0 END,value DESC,name,id", p.id)) : store.all("SELECT * FROM prizes WHERE pool_id=? ORDER BY CASE WHEN kind='none' THEN 1 ELSE 0 END,value DESC,name,id", p.id) };
   }
 
-  app.get('/api/config', (_req, res) => res.json({ production: config.production, registration: config.registration, paidDraws: config.paidDraws, manualTopups: config.manualTopups, passwordReset: !!config.smtp.host || !config.production, feeBps: config.feeBps, holdHours: config.holdHours }));
+  app.get('/api/config', (_req, res) => res.json({ demo:false,demoAvailable:false,basePath:'',production: config.production, registration: config.registration, paidDraws: config.paidDraws, manualTopups: config.manualTopups, passwordReset: !config.demoMode&&(!!config.smtp.host || !config.production), feeBps: config.feeBps, holdHours: config.holdHours }));
+  app.get('/api/payments/config', (_req, res) => res.json({enabled:config.ecpay.enabled,mode:config.ecpay.mode,pointsPerTwd:1,maxAmount:20000}));
+  app.post('/api/payments/ecpay', requireAuth, limit('ecpay-checkout', 10, 60000, true), (req, res) => mutation(req, res, () => createCheckout(store, config, currentUser(req).id, req.body)));
+  app.get('/api/me/payments', requireAuth, (req, res) => res.json(store.all('SELECT order_no,amount,points,status,environment,created_at,paid_at FROM payment_orders WHERE user_id=? ORDER BY created_at DESC LIMIT 100', currentUser(req).id)));
   app.get('/api/auth/me', (req, res) => res.json({ user: req.user ? publicUser(req.user) : null, csrf: req.session?.csrf ?? null }));
   app.post('/api/auth/register', limit('auth', 12, 15 * 60000), async (req, res) => {
     assert(config.registration, '目前暫停新會員註冊', 403);
-    const data = z.object({ email: z.email().max(254).transform(v => v.toLowerCase()), name: text(60), password: passwordSchema }).strict().parse(req.body);
+    if(config.demoMode){assert(typeof req.body?.email==='string'&&req.body.email.trim().toLowerCase().endsWith('@example.test'),'體驗站只接受@example.test示範帳號，請勿填真實資料',400);assert(requireRow(store.one('SELECT COUNT(*) n FROM users')).n<2000,'示範帳號已達上限',503);}
+    const data = z.object({ email: z.string().trim().pipe(z.email().max(254)).transform(v => v.toLowerCase()), name: text(60), password: passwordSchema,acceptedPolicies:z.literal(true).optional(),storefrontVersion:z.number().int().min(1).optional() }).strict().parse(req.body);
     const hash = await passwordHash(data.password), id = randomUUID();
     store.tx(() => {
       assert(!store.one('SELECT id FROM users WHERE email=?', data.email), '無法建立帳戶，請改用登入或密碼重設', 409);
       store.run('INSERT INTO users(id,email,name,password_hash,created_at) VALUES (?,?,?,?,?)', id, data.email, data.name, hash, Date.now());
+      recordRegistrationConsent(store,id,data);
       if (config.devPoints) store.balance(id, config.devPoints, 'dev_grant', id);
       store.audit(id, 'register', id);
     });
     if (req.session) store.run('DELETE FROM sessions WHERE token_hash=?', req.session.token_hash);
     res.status(201).json({ csrf: newSession(store, config, id, res), user: publicUser(requireRow(store.one('SELECT * FROM users WHERE id=?', id))) });
   });
+  function finishPasswordLogin(req:Request,res:Response,snapshot:Record<string,any>,otp:string|undefined,action:'login'|'admin_login') {
+    const result=store.tx(()=>{
+      const fresh=freshCredentialUser(store,snapshot);
+      checkAdminMfa(store,config,fresh,otp,true);
+      if(req.session)store.run('DELETE FROM sessions WHERE token_hash=?',req.session.token_hash);
+      store.audit(fresh.id,action,fresh.id);
+      return {csrf:newSession(store,config,fresh.id,res),user:publicUser(fresh)};
+    });
+    res.json(result);
+  }
   app.post('/api/auth/login', limit('auth', 12, 15 * 60000), async (req, res) => {
-    const data = z.object({ email: z.email().max(254), password: z.string().min(1).max(128) }).strict().parse(req.body);
+    const data = z.object({ email: z.string().trim().pipe(z.email().max(254)), password: z.string().min(1).max(128), otp:z.string().max(32).optional() }).strict().parse(req.body);
     const user = store.one('SELECT * FROM users WHERE email=?', data.email);
     const dummy = '00000000000000000000000000000000:' + '00'.repeat(64);
     const valid = await passwordMatches(data.password, user?.password_hash ?? dummy);
     if (!valid || !user || user.disabled) throw new HttpError(401, '帳號或密碼錯誤');
-    if (req.session) store.run('DELETE FROM sessions WHERE token_hash=?', req.session.token_hash);
-    res.json({ csrf: newSession(store, config, user.id, res), user: publicUser(user) });
+    finishPasswordLogin(req,res,user,data.otp,'login');
   });
-  app.post('/api/auth/logout', requireAuth, (req, res) => { store.run('DELETE FROM sessions WHERE token_hash=?', req.session!.token_hash); res.clearCookie(cookieName(config), { path: '/', secure: config.production, httpOnly: true, sameSite: 'strict' }); res.json({ ok: true }); });
+  app.post('/api/auth/logout', requireAuth, (req, res) => { store.run('DELETE FROM sessions WHERE token_hash=?', req.session!.token_hash); store.audit(req.user!.id,'logout',req.user!.id);res.clearCookie(cookieName(config), { path: config.basePath||'/', secure: config.production, httpOnly: true, sameSite: 'strict' }); res.json({ ok: true }); });
+  app.post('/api/auth/admin-login', limit('auth', 12, 15 * 60000), async (req,res)=>{
+    const data=z.object({email:z.string().trim().pipe(z.email().max(254)),password:z.string().min(1).max(128),otp:z.string().max(32).optional()}).strict().parse(req.body);
+    const user=store.one('SELECT * FROM users WHERE email=?',data.email);
+    const dummy='00000000000000000000000000000000:'+'00'.repeat(64);
+    const valid=await passwordMatches(data.password,user?.password_hash??dummy);
+    if(!valid||!user||user.disabled||user.role!=='admin')throw new HttpError(401,'管理帳號或密碼錯誤');
+    finishPasswordLogin(req,res,user,data.otp,'admin_login');
+  });
   app.post('/api/auth/forgot', limit('reset', 4, 3600000), async (req, res) => {
-    const { email } = z.object({ email: z.email().max(254) }).strict().parse(req.body);
+    const { email } = z.object({ email: z.string().trim().pipe(z.email().max(254)) }).strict().parse(req.body);
     assert(!!config.smtp.host || !config.production, '密碼重設郵件服務尚未設定，請聯絡官方', 503);
     const user = store.one('SELECT id FROM users WHERE email=? AND disabled=0', email);
     if (user) {
@@ -139,7 +181,7 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     const data = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/), password: passwordSchema }).strict().parse(req.body);
     const hash = await passwordHash(data.password);
     store.tx(() => {
-      const reset = store.one('SELECT * FROM resets WHERE token_hash=? AND expires_at>?', sha256(data.token), Date.now());
+      const reset = store.one('SELECT r.* FROM resets r JOIN users u ON u.id=r.user_id WHERE r.token_hash=? AND r.expires_at>? AND u.disabled=0', sha256(data.token), Date.now());
       assert(reset, '重設連結無效或已過期', 400);
       store.run('UPDATE users SET password_hash=? WHERE id=?', hash, reset.user_id);
       store.run('DELETE FROM resets WHERE user_id=?', reset.user_id); store.run('DELETE FROM sessions WHERE user_id=?', reset.user_id);
@@ -148,7 +190,9 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     res.json({ ok: true });
   });
 
-  app.get('/api/pools', (_req, res) => res.json(store.all("SELECT p.*,u.name creator FROM pools p JOIN users u ON u.id=p.owner_id WHERE p.status IN ('approved','live','sold_out','settled') ORDER BY p.created_at DESC LIMIT 200").map(p => poolView(p))));
+  installPractice(app,store,mutation,limit('practice-draw',30,60000,true),config);
+  app.get('/api/catalog/upcoming',(_req,res)=>res.json({items:upcomingProducts(store)}));
+  app.get('/api/pools', (_req, res) => res.json(store.all("SELECT p.*,u.name creator FROM pools p JOIN users u ON u.id=p.owner_id WHERE p.status IN ('approved','live','sold_out','settled') AND NOT EXISTS(SELECT 1 FROM prizes r WHERE r.pool_id=p.id AND r.kind='none') ORDER BY p.created_at DESC LIMIT 200").map(p => poolView(p)).concat(practicePools(store))));
   app.get('/api/pools/:id', (req, res) => {
     const p = requireRow(store.one('SELECT p.*,u.name creator FROM pools p JOIN users u ON u.id=p.owner_id WHERE p.id=?', getId(req)));
     const owner = p.owner_id === req.user?.id || req.user?.role === 'admin';
@@ -157,6 +201,7 @@ export function createApp(store: Store, config: Config, publicDir: string) {
   });
   app.get('/api/pools/:id/proof', (req, res) => {
     const p = requireRow(store.one("SELECT * FROM pools WHERE id=? AND status IN ('approved','live','sold_out','settled')", getId(req)));
+    if (p.draw_mode === 'weighted') { res.json({algorithm:'weighted-live-v1',verifiable:false,oddsVersion:p.odds_version,message:'此獎池使用管理員設定的即時權重，不提供預先承諾序列驗證。'}); return; }
     res.json({ algorithm: 'hmac-sha256-fisher-yates-v1', commitment: p.commitment, manifest: p.manifest, manifestHash: p.manifest_hash, seed: p.remaining === 0 ? p.seed : null,
       draws: store.all('SELECT id,ordinal,prize_id FROM draws WHERE pool_id=? ORDER BY ordinal', p.id) });
   });
@@ -167,14 +212,14 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     const data = poolSchema.parse(req.body), id = randomUUID(), total = data.prizes.reduce((s, p) => s + p.quantity, 0);
     assert(total <= 10000, '總抽數不可超過 10,000', 400);
     assert(data.kind === 'free' ? data.price === 0 : data.price > 0, '免費池價格必須為 0，付費池價格必須大於 0', 400);
-    for (const p of data.prizes) { assert(p.kind !== 'none' || (p.value === 0 && p.redeemPoints === 0), '未中獎項目不可含有點數', 400); assert(p.kind !== 'points' || (p.value > 0 && p.redeemPoints === 0), '點數獎的 value 必須大於 0，兌點必須為 0', 400); }
+    for (const p of data.prizes) { assert(p.kind !== 'points' || (p.value > 0 && p.redeemPoints === 0), '點數獎的 value 必須大於 0，兌點必須為 0', 400); }
     checkImages(req, [data.cover, ...data.descriptionImages, ...data.prizes.map(p => p.image)]);
     store.run("INSERT INTO pools(id,owner_id,name,description,cover,description_images,status,kind,price,total,remaining,fee_bps,created_at) VALUES (?,?,?,?,?,?,'draft',?,?,?,?,?,?)", id, currentUser(req).id, data.name, data.description, data.cover, JSON.stringify(data.descriptionImages), data.kind, data.price, total, total, config.feeBps, Date.now());
-    for (const p of data.prizes) store.run('INSERT INTO prizes VALUES (?,?,?,?,?,?,?,?,?)', randomUUID(), id, p.name, p.kind, p.image, p.value, p.redeemPoints, p.quantity, p.quantity);
+    for (const p of data.prizes) store.run('INSERT INTO prizes(id,pool_id,name,kind,image,value,redeem_points,quantity,remaining) VALUES (?,?,?,?,?,?,?,?,?)', randomUUID(), id, p.name, p.kind, p.image, p.value, p.redeemPoints, p.quantity, p.quantity);
     store.audit(currentUser(req).id, 'pool_create', id); return { id };
   }));
   app.post('/api/pools/:id/submit', requireAuth, (req, res) => mutation(req, res, () => {
-    const p = ownedPool(req); assert(['draft','rejected'].includes(p.status), '只有草稿或已拒絕獎池可以送審');
+    const p = ownedPool(req); everyDrawWins(p.id); assert(['draft','rejected'].includes(p.status), '只有草稿或已拒絕獎池可以送審');
     const reserve = requireRow(store.one("SELECT SUM(quantity * CASE WHEN kind='points' THEN value ELSE redeem_points END) total FROM prizes WHERE pool_id=?", p.id)).total;
     assert(reserve <= 100000000, '獎池點數準備金超出上限', 400);
     if (reserve) store.balance(p.owner_id, -reserve, 'pool_reserve', `${p.id}:${randomUUID()}`);
@@ -182,8 +227,9 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     store.audit(currentUser(req).id, 'pool_submit', p.id); return { ok: true };
   }));
   app.post('/api/pools/:id/open', requireAuth, (req, res) => mutation(req, res, () => {
-    const p = ownedPool(req); assert(p.status === 'approved', '獎池尚未核准或已開池');
+    const p = ownedPool(req); everyDrawWins(p.id); assert(p.status === 'approved', '獎池尚未核准或已開池');
     assert(p.kind === 'free' || config.paidDraws, '付費抽獎目前未啟用', 503);
+    if(config.production&&p.kind==='paid')requirePublishedStorefront(store);
     store.run("UPDATE pools SET status='live' WHERE id=?", p.id); store.audit(currentUser(req).id, 'pool_open', p.id); return { ok: true };
   }));
   app.post('/api/pools/:id/content', requireAuth, (req, res) => mutation(req, res, () => {
@@ -203,10 +249,14 @@ export function createApp(store: Store, config: Config, publicDir: string) {
 
   app.post('/api/pools/:id/draw', requireAuth, limit('draw', 60, 60000, true), (req, res) => mutation(req, res, () => {
     const user = currentUser(req), p = requireRow(store.one('SELECT * FROM pools WHERE id=?', getId(req)));
-    const { quantity } = z.object({ quantity: z.number().int().min(1).max(10) }).strict().parse(req.body);
+    everyDrawWins(p.id);
+    const { quantity, oddsVersion,presentationSlots } = z.object({ quantity: z.number().int().min(1).max(10), oddsVersion:z.number().int().min(0).optional(),presentationSlots:z.array(z.number().int().min(1).max(24)).min(1).max(10).optional() }).strict().parse(req.body);
+    if(presentationSlots)assert(presentationSlots.length===quantity&&new Set(presentationSlots).size===quantity,'選籤張數不符或重複',400);
+    if (p.draw_mode === 'weighted') assert(oddsVersion === p.odds_version, '機率已更新，請重新開啟獎池後再抽獎');
     assert(user.role !== 'admin' && p.owner_id !== user.id, '官方或開池者不可參與此抽獎', 403);
     assert(p.status === 'live', '獎池尚未開放或已結束'); assert(p.remaining >= quantity, '剩餘抽數不足');
     assert(p.kind === 'free' || config.paidDraws, '付費抽獎目前未啟用', 503);
+    if(config.production&&p.kind==='paid')requirePublishedStorefront(store);
     if (p.kind === 'free') { assert(quantity === 1, '免費池每次限一抽', 400); assert(!store.one('SELECT 1 FROM free_claims WHERE pool_id=? AND user_id=?', p.id, user.id), '每個帳戶限領取一次'); store.run('INSERT INTO free_claims VALUES (?,?)', p.id, user.id); }
     const cost = p.price * quantity, requestId = randomUUID();
     if (cost) store.balance(user.id, -cost, 'draw_payment', requestId);
@@ -214,22 +264,29 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     let reserveUsed = 0;
     for (let i = 0; i < quantity; i++) {
       const ordinal = p.total - p.remaining + i;
-      const prize = requireRow(store.one('SELECT r.* FROM tickets t JOIN prizes r ON r.id=t.prize_id WHERE t.pool_id=? AND t.ordinal=?', p.id, ordinal));
+      const prize = p.draw_mode === 'weighted' ? pickWeighted(store.all('SELECT * FROM prizes WHERE pool_id=? ORDER BY id',p.id)) : requireRow(store.one('SELECT r.* FROM tickets t JOIN prizes r ON r.id=t.prize_id WHERE t.pool_id=? AND t.ordinal=?', p.id, ordinal));
       const id = randomUUID();
       assert(prize.remaining > 0, '獎品庫存異常');
       store.run('INSERT INTO draws VALUES (?,?,?,?,?,?,?)', id, p.id, user.id, prize.id, ordinal, p.price, Date.now());
       store.run('UPDATE prizes SET remaining=remaining-1 WHERE id=? AND remaining>0', prize.id);
       if (prize.kind === 'points') { store.balance(user.id, prize.value, 'prize_points', id); reserveUsed += prize.value; }
       if (prize.kind === 'physical') store.run("INSERT INTO collection(id,draw_id,user_id,prize_id,status) VALUES (?,?,?,?,'available')", randomUUID(), id, user.id, prize.id);
-      results.push({ id, ordinal, prizeId: prize.id, name: prize.name, kind: prize.kind, value: prize.value, image: prize.image });
+      if(presentationSlots)store.run('INSERT INTO draw_presentations VALUES(?,?)',id,presentationSlots[i]);
+      results.push({ ...(presentationSlots?{presentationSlot:presentationSlots[i]}:{}),id, ordinal, prizeId: prize.id, name: prize.name, kind: prize.kind, value: prize.value, image: prize.image });
     }
     store.run("UPDATE pools SET remaining=remaining-?,revenue_points=revenue_points+?,reserve_points=reserve_points-?,status=CASE WHEN remaining=? THEN 'sold_out' ELSE status END,closed_at=CASE WHEN remaining=? THEN ? ELSE NULL END WHERE id=?", quantity, cost, reserveUsed, quantity, quantity, Date.now(), p.id);
-    store.audit(user.id, 'draw', p.id, { quantity, cost, drawIds: results.map(r => r.id) });
+    store.audit(user.id, 'draw', p.id, { quantity, cost, drawIds: results.map(r => r.id), drawMode:p.draw_mode, oddsVersion:p.odds_version });
     return { results, points: requireRow(store.one('SELECT points FROM users WHERE id=?', user.id)).points };
   }));
 
   app.get('/api/me/collection', requireAuth, (req, res) => res.json(store.all('SELECT c.*,r.name,r.image,r.redeem_points,p.name pool_name,p.fulfillment,p.owner_id FROM collection c JOIN prizes r ON r.id=c.prize_id JOIN pools p ON p.id=r.pool_id WHERE c.user_id=? ORDER BY c.rowid DESC LIMIT 500', currentUser(req).id)));
-  app.get('/api/me/draws', requireAuth, (req, res) => res.json(store.all('SELECT d.*,r.name,p.name pool_name FROM draws d JOIN prizes r ON r.id=d.prize_id JOIN pools p ON p.id=d.pool_id WHERE d.user_id=? ORDER BY d.created_at DESC LIMIT 200', currentUser(req).id)));
+  app.get('/api/me/draws', requireAuth, (req, res) => res.json(store.all('SELECT d.*,r.name,r.kind,r.value,r.image,dp.slot presentationSlot,p.name pool_name FROM draws d JOIN prizes r ON r.id=d.prize_id JOIN pools p ON p.id=d.pool_id LEFT JOIN draw_presentations dp ON dp.draw_id=d.id WHERE d.user_id=? ORDER BY d.created_at DESC LIMIT 200', currentUser(req).id).concat(practiceHistory(store,currentUser(req).id)).sort((a,b)=>b.created_at-a.created_at).slice(0,200)));
+  app.get('/api/me/draw-requests/:key',requireAuth,(req,res)=>{
+    const key=z.string().regex(/^[A-Za-z0-9_-]{16,100}$/).parse(req.params.key),row=requireRow(store.one('SELECT response FROM idempotency WHERE user_id=? AND key=?',currentUser(req).id,key)),data=JSON.parse(row.response);
+    assert(Array.isArray(data.results)&&data.results.every((r:any)=>typeof r.id==='string'),'找不到抽獎結果',404);res.json(data);
+  });
+  app.get('/api/me/draws/:id',requireAuth,(req,res)=>res.json(requireRow(store.one('SELECT d.id,d.ordinal,r.name,r.kind,r.value,r.image,dp.slot presentationSlot FROM draws d JOIN prizes r ON r.id=d.prize_id LEFT JOIN draw_presentations dp ON dp.draw_id=d.id WHERE d.id=? AND d.user_id=?',getId(req),currentUser(req).id))));
+  app.get('/api/me/wallet',requireAuth,(req,res)=>res.json(walletSummary(store,currentUser(req).id)));
   app.get('/api/me/ledger', requireAuth, (req, res) => res.json(store.all('SELECT * FROM ledger WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 200', currentUser(req).id)));
   app.post('/api/collection/:id/redeem', requireAuth, (req, res) => mutation(req, res, () => {
     const user = currentUser(req), c = requireRow(store.one('SELECT c.*,r.pool_id,r.redeem_points FROM collection c JOIN prizes r ON r.id=c.prize_id WHERE c.id=? AND c.user_id=?', getId(req), user.id));
@@ -309,6 +366,9 @@ export function createApp(store: Store, config: Config, publicDir: string) {
   });
 
   app.use('/api/admin', requireAuth, requireAdmin);
+  installStorefront(app,store,config,mutation);
+  app.get('/api/admin/reconciliation',(req,res)=>{const {page}=z.object({page:z.coerce.number().int().min(1).max(100000).default(1)}).strict().parse(req.query);res.json(reconciliation(store,page));});
+  installAdmin(app, store, { mutation, prizeSchema, checkImages, config });
   app.get('/api/admin/users', (_req, res) => res.json(store.all('SELECT id,email,name,role,disabled,creator_requested,points,created_at FROM users ORDER BY created_at DESC LIMIT 200')));
   app.post('/api/admin/users/:id', (req, res) => mutation(req, res, () => {
     const user = requireRow(store.one('SELECT * FROM users WHERE id=?', getId(req))), actor = currentUser(req);
@@ -316,13 +376,23 @@ export function createApp(store: Store, config: Config, publicDir: string) {
     assert(user.id !== actor.id, '不可修改自己的管理員權限');
     if (user.role === 'creator' && data.role !== 'creator' && data.role !== 'admin') assert(!store.one("SELECT id FROM pools WHERE owner_id=? AND status NOT IN ('settled','cancelled','rejected','draft') LIMIT 1", user.id), '此創作者仍有進行中的獎池，請先完成履約');
     store.run('UPDATE users SET role=?,disabled=?,creator_requested=0 WHERE id=?', data.role, Number(data.disabled), user.id);
-    store.run('DELETE FROM sessions WHERE user_id=?', user.id); store.audit(actor.id, 'user_permissions', user.id, data); return { ok: true };
+    store.run('DELETE FROM sessions WHERE user_id=?', user.id);
+    store.run('DELETE FROM resets WHERE user_id=?', user.id);
+    store.run('DELETE FROM oauth_states WHERE user_id=?', user.id);
+    store.audit(actor.id, 'user_permissions', user.id, data); return { ok: true };
   }));
   app.get('/api/admin/pools', (_req, res) => res.json(store.all('SELECT p.*,u.name creator FROM pools p JOIN users u ON u.id=p.owner_id ORDER BY p.created_at DESC LIMIT 200').map(p => poolView(p, true))));
   app.post('/api/admin/pools/:id/review', (req, res) => mutation(req, res, () => {
     const p = requireRow(store.one('SELECT * FROM pools WHERE id=?', getId(req))), data = z.object({ approve: z.boolean(), note: text(1000) }).strict().parse(req.body);
     assert(p.status === 'pending', '此獎池不在待審核狀態'); assert(p.owner_id !== currentUser(req).id, '不可審核自己建立的獎池', 403);
     if (data.approve) {
+      everyDrawWins(p.id);
+      assert(!store.one('SELECT 1 FROM starter_catalog WHERE pool_id=?',p.id)||p.remaining>0,'實體商品草稿沒有可抽庫存，請先核實並編輯物品庫存',409);
+      if (p.draw_mode === 'weighted') {
+        assert(requireRow(store.one('SELECT SUM(weight_bps) total FROM prizes WHERE pool_id=?',p.id)).total===10000,'請先設定合計 100% 的物品機率',400);
+        store.run("UPDATE pools SET status='approved',review_note=? WHERE id=?",data.note,p.id);
+        store.audit(currentUser(req).id,'pool_review',p.id,data);return {ok:true};
+      }
       const prizes = store.all('SELECT id,name,kind,image,value,redeem_points,quantity FROM prizes WHERE pool_id=? ORDER BY id', p.id);
       const seed = randomBytes(32).toString('hex'), manifest = JSON.stringify(prizes);
       const tickets = ticketOrder(seed, prizes.map(p => ({ id: p.id, quantity: p.quantity })));
@@ -374,11 +444,13 @@ export function createApp(store: Store, config: Config, publicDir: string) {
   app.get('/api/admin/pools/:id/draws', (req, res) => res.json(store.all('SELECT d.*,u.email,u.name player,r.name prize FROM draws d JOIN users u ON u.id=d.user_id JOIN prizes r ON r.id=d.prize_id WHERE d.pool_id=? ORDER BY ordinal LIMIT 10000', getId(req))));
   app.use('/api', (_req, _res) => { throw new HttpError(404, 'API 不存在'); });
   app.use('/uploads', express.static(config.uploadDir, { dotfiles: 'deny', index: false, maxAge: '1y', immutable: true, setHeaders(res) { res.setHeader('Content-Type', 'image/webp'); } }));
+  app.use('/admin',(_req,res,next)=>{res.setHeader('Cache-Control','no-store');res.setHeader('X-Robots-Tag','noindex, nofollow');next();});
+  app.get('/auth/complete',(_req,res)=>res.set('Cache-Control','no-store').sendFile(path.join(publicDir,'auth-complete.html')));
   app.use(express.static(publicDir, { index: 'index.html', maxAge: 0 }));
   app.use((_req, res) => res.status(404).json({ error: '找不到頁面' }));
   app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
     if (error instanceof z.ZodError) { res.status(400).json({ error: '輸入資料格式不正確', fields: error.issues.map(i => ({ path: i.path.join('.'), message: i.message })) }); return; }
-    if (error instanceof HttpError) { res.status(error.status).json({ error: error.message }); return; }
+    if (error instanceof HttpError) { res.status(error.status).json({ error: error.message, ...(error.code ? {code:error.code} : {}) }); return; }
     if (error.type === 'entity.too.large') { res.status(413).json({ error: '檔案或資料超過大小限制' }); return; }
     if (error.type === 'entity.parse.failed') { res.status(400).json({ error: 'JSON 格式不正確' }); return; }
     console.error(JSON.stringify({ event: 'request_error', code: error.code ?? 'unknown', message: error.message }));

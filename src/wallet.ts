@@ -1,0 +1,19 @@
+import type {Store} from './db.js';
+const categories=['paid','reward','adjustment','stage','legacy','other'] as const;
+export function walletSummary(store:Store,user:string){return store.tx(()=>{
+ const row=store.one('SELECT points FROM users WHERE id=?',user)!,lots=store.all('SELECT category,COALESCE(SUM(remaining),0) points FROM point_lots WHERE user_id=? GROUP BY category',user);
+ const balances=Object.fromEntries(categories.map(c=>[c,Number(lots.find(r=>r.category===c)?.points??0)]));
+ const lotBalance=Object.values(balances).reduce((a,b)=>a+b,0),ledgerBalance=Number(store.one('SELECT COALESCE(SUM(delta),0) points FROM ledger WHERE user_id=?',user)!.points);
+ const sourceHistoryIssues=store.pointHistoryIssues(user),holdIssues=store.holdHistoryIssues(user),heldPoints=store.heldBalance(user);
+ return {sourceHistoryIssues,holdIssues,heldPoints,totalPoints:Number(row.points)+heldPoints,points:Number(row.points),lotBalance,ledgerBalance,balances,conserved:lotBalance===row.points&&ledgerBalance===row.points&&sourceHistoryIssues===0&&holdIssues===0,spendPolicy:'FIFO: oldest credited points first; same timestamp uses ledger insertion order',cashValue:false,legacyProvenanceUnknown:balances.legacy>0};
+ });}
+export function reconciliation(store:Store,page=1){return store.tx(()=>{
+ const sql=`SELECT u.id,u.email,u.name,u.points,COALESCE((SELECT SUM(delta) FROM ledger l WHERE l.user_id=u.id),0) ledgerBalance,COALESCE((SELECT SUM(remaining) FROM point_lots p WHERE p.user_id=u.id),0) lotBalance,COALESCE((SELECT SUM(remaining) FROM point_lots p WHERE p.user_id=u.id AND category='legacy'),0) legacyBalance ,((SELECT COUNT(*) FROM point_lots t LEFT JOIN ledger c ON c.id=t.credit_ledger_id WHERE t.user_id=u.id AND (t.issued<>t.remaining+COALESCE((SELECT SUM(a.points) FROM point_allocations a WHERE a.lot_id=t.id),0) OR (t.credit_ledger_id IS NOT NULL AND c.delta<>t.issued)))+(SELECT COUNT(*) FROM ledger l WHERE l.user_id=u.id AND l.delta<0 AND l.rowid>(SELECT legacy_ledger_rowid FROM point_accounting_state WHERE id=1) AND -l.delta<>COALESCE((SELECT SUM(a.points) FROM point_allocations a WHERE a.debit_ledger_id=l.id),0))) sourceHistoryIssues FROM users u`;
+ const totals=store.one('SELECT COUNT(*) accounts,COALESCE(SUM(points),0) points,COALESCE(SUM(ledgerBalance),0) ledgerBalance,COALESCE(SUM(lotBalance),0) lotBalance,COALESCE(SUM(CASE WHEN points<>ledgerBalance OR points<>lotBalance OR sourceHistoryIssues<>0 THEN 1 ELSE 0 END),0) issues,COALESCE(SUM(CASE WHEN legacyBalance>0 THEN 1 ELSE 0 END),0) legacyAccounts FROM ('+sql+')')!;
+ const pageCount=Math.max(1,Math.ceil(Number(totals.accounts)/100));page=Math.min(page,pageCount);
+ const holdIssues=store.all("SELECT id FROM users").reduce((n,u)=>n+store.holdHistoryIssues(u.id),0);
+ const refunds=store.one("SELECT COALESCE(SUM(CASE WHEN status='processing' THEN 1 ELSE 0 END),0) processing,COALESCE(SUM(CASE WHEN status IN('requested','needs_review','legacy_review') THEN 1 ELSE 0 END),0) pending,COALESCE(SUM(CASE WHEN status='completed' THEN loss_accepted ELSE 0 END),0) acceptedLossPoints FROM refunds")!;
+ const heldPoints=Number(store.one("SELECT COALESCE(SUM(points),0) n FROM wallet_holds WHERE state='active'")!.n);
+ const items=store.all(sql+' ORDER BY u.created_at DESC,u.id LIMIT 100 OFFSET ?',(page-1)*100).map(r=>({...r,conserved:r.points===r.ledgerBalance&&r.points===r.lotBalance&&r.sourceHistoryIssues===0&&store.holdHistoryIssues(r.id)===0,heldPoints:store.heldBalance(r.id),holdIssues:store.holdHistoryIssues(r.id)}));
+ return {...totals,holdIssues,heldPoints,refunds,items,page,pageCount,pageSize:100,generatedAt:Date.now(),autoRepair:false,definition:'Account balance = append-only ledger net = remaining point lots. Legacy provenance is not assumed to be paid. This does not verify bank settlement.'};
+ });}
